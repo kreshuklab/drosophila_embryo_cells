@@ -1,0 +1,11 @@
+__pycache__
+data
+imgs
+info
+tmp*
+*.csv
+config*
+*.pyc
+exclude-file.txt
+lrsync.lua
+
