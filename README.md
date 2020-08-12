@@ -1,4 +1,4 @@
-#Drosophila emryo cell classification
+# Drosophila emryo cell classification
 
 Classifying cells into constricting or expanding during the Drosophila gastrulation
 
