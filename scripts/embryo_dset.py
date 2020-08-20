@@ -1,8 +1,10 @@
 from torch.utils.data.dataset import Dataset
 from scipy.ndimage import find_objects
 
+
 class EmbryoDataset(Dataset):
-    def __init__(self, indices, segm_data, membrane_data=None, myosin_data=None):
+    def __init__(self, indices, segm_data, transforms,
+                 membrane_data=None, myosin_data=None):
         if membrane_data: assert membrane_data.shape == segm_data.shape
         if myosin_data: assert myosin_data.shape == segm_data.shape
         self.indices = indices
@@ -10,9 +12,11 @@ class EmbryoDataset(Dataset):
         self.membrane_data = membrane_data
         self.myosin_data = myosin_data
         self.bbs = self.get_bbs(segm_data)
+        self.transforms = transforms
 
     def get_bbs(self, segm_image):
         bbs = find_objects(segm_image)
+        # find_objects ignores label 0, but it's handy to index like this
         bbs.insert(0, None)
         return bbs
 
@@ -21,8 +25,8 @@ class EmbryoDataset(Dataset):
 
 
 class ClassEmbryoDataset(EmbryoDataset):
-    def __init__(self, indices, segm_data, class_labels):
-        super().__init__(indices, segm_data)
+    def __init__(self, class_labels, **kwargs):
+        super().__init__(**kwargs)
         assert isinstance(class_labels, dict)
         self.class_labels = class_labels
 
@@ -31,4 +35,4 @@ class ClassEmbryoDataset(EmbryoDataset):
         print(cell_id)
         cell_class = self.class_labels[cell_id]
         cell_mask = self.segm_data[self.bbs[cell_id]] == cell_id
-        return cell_mask, cell_class
+        return self.transforms(cell_mask), cell_class
