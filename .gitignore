@@ -3,6 +3,7 @@ data
 imgs
 info
 trainings
+try*
 tmp*
 *.csv
 config*

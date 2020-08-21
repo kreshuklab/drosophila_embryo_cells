@@ -74,7 +74,7 @@ class EmbryoDataloader():
             row_dict[i] = row[0]
         return row_dict
 
-    def get_class_loader(self):
+    def get_class_loaders(self):
         segm_frame = self.segmentation[self.tf]
         split_labels = get_train_val_split(self.tf2ids[self.tf])
         cell_dsets = [ClassEmbryoDataset(class_labels=self.id2row, indices=lbls,
