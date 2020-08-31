@@ -58,6 +58,7 @@ class EmbryoDataloader():
         self.tf = self.config.get('timeframe', None)
         self.transforms = [get_transforms(self.config.get(key))
                            for key in ['train_transforms', 'val_transforms']]
+        self.basic_tfs = get_transforms(self.config.get('basic_transforms'))
 
     def get_tf_dict(self, table):
         tf_dict = {}
@@ -84,3 +85,13 @@ class EmbryoDataloader():
         train_loader = DataLoader(cell_dsets[0], **self.config.get('loader_config'))
         val_loader = DataLoader(cell_dsets[1], **self.config.get('val_loader_config'))
         return train_loader, val_loader
+
+    def get_predict_loader(self):
+        segm_frame = self.segmentation[self.tf]
+        lbls = self.tf2ids[self.tf]
+        tfs = self.basic_tfs
+        cell_dset = ClassEmbryoDataset(class_labels=self.id2row, indices=lbls,
+                                         segm_data=segm_frame, transforms=tfs,
+                                         **self.config.get('dataset_kwargs', {}))
+        predict_loader = DataLoader(cell_dset, **self.config.get('val_loader_config'))
+        return predict_loader

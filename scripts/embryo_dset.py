@@ -38,7 +38,6 @@ class ClassEmbryoDataset(EmbryoDataset):
 
     def __getitem__(self, idx):
         cell_id = self.indices[idx]
-        print(cell_id)
         cell_class = self.class_labels[cell_id]
         cell_mask = self.segm_data[self.bbs[cell_id]] == cell_id
         return self.transforms(cell_mask), self.norm_label(cell_class)

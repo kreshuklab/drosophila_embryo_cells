@@ -29,7 +29,6 @@ class SimpleConvNet(nn.Module):
             x = conv_layer(x)
         x = self.pool(x)
         x = torch.flatten(x, 1)
-        print(x.shape)
         x = self.fc1(x)
         x = self.fc2(x)
         x = torch.squeeze(x, dim=1)
