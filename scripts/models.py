@@ -24,12 +24,16 @@ class SimpleConvNet(nn.Module):
             layers.append(layer)
         return nn.ModuleList(layers)
 
-    def forward(self, x):
+    def embed(self, x):
         for conv_layer in self.conv_layers:
             x = conv_layer(x)
         x = self.pool(x)
         x = torch.flatten(x, 1)
         x = self.fc1(x)
-        x = self.fc2(x)
-        x = torch.squeeze(x, dim=1)
         return x
+
+    def forward(self, inp):
+        inp = self.embed(inp)
+        inp = self.fc2(inp)
+        inp = torch.squeeze(inp, dim=1)
+        return inp

@@ -30,7 +30,7 @@ def print_results(pred_labels, true_labels):
     for lbl in np.unique(true_labels):
         distance = np.sum(np.abs(pred_labels[np.where(true_labels == lbl)] - lbl)) \
                          / np.sum(true_labels == lbl)
-        print("Accuracy for {0} is {1}".format(lbl, distance))
+        #print("Accuracy for {0} is {1}".format(lbl, distance))
         pred_distances.append(distance)
     print("Average accuracy is ", np.mean(pred_distances))
     print(metrics.confusion_matrix(true_labels, pred_labels))
@@ -42,11 +42,11 @@ if __name__ == "__main__":
     parser.add_argument('--device', type=str, default='0',
                         choices=[str(i) for i in range(8)], help='GPU to use')
     args = parser.parse_args()
-    print("The model is", os.path.split(os.path.normpath(args.path))[-1])
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device
     config_file = os.path.join(args.path, 'data_config.yml')
     val_loader = EmbryoDataloader(config_file).get_predict_loader()
     model_path = os.path.join(args.path, 'Weights')
     best_model = Trainer().load(from_directory=model_path, best=True).model
+    print("The model is", os.path.split(os.path.normpath(args.path))[-1])
     predictions, targets = predict(best_model, val_loader)
     print_results(predictions, targets)
