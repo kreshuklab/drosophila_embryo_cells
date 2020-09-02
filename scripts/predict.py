@@ -7,9 +7,6 @@ from sklearn import metrics
 from embryo_loader import EmbryoDataloader
 
 
-CLASS_NAMES = ['pyramidal', 'non pyramidal', 'non neuronal', 'unclassified']
-
-
 def predict(model, loader):
     all_predictions = []
     all_targets = []
@@ -30,9 +27,8 @@ def print_results(pred_labels, true_labels):
     for lbl in np.unique(true_labels):
         distance = np.sum(np.abs(pred_labels[np.where(true_labels == lbl)] - lbl)) \
                          / np.sum(true_labels == lbl)
-        #print("Accuracy for {0} is {1}".format(lbl, distance))
         pred_distances.append(distance)
-    print("Average accuracy is ", np.mean(pred_distances))
+    print("Average distance is ", np.mean(pred_distances))
     print(metrics.confusion_matrix(true_labels, pred_labels))
 
 

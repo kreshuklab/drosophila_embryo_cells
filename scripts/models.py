@@ -14,6 +14,7 @@ class SimpleConvNet(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1) if pool == 'avg' else nn.AdaptiveMaxPool3d(1)
         self.fc1 = nn.Linear(self.channels[-1], fc_size)
         self.fc2 = nn.Linear(fc_size, num_classes)
+        self.final_activation = nn.Sigmoid() if num_classes == 1 else nn.Softmax2d()
 
     def get_conv_layers(self, num):
         layers = []
@@ -35,5 +36,6 @@ class SimpleConvNet(nn.Module):
     def forward(self, inp):
         inp = self.embed(inp)
         inp = self.fc2(inp)
+        inp = self.final_activation(inp)
         inp = torch.squeeze(inp, dim=1)
         return inp

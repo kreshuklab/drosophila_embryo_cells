@@ -114,7 +114,7 @@ def training(project_directory, train_configuration_file,
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('project_directory', type=str)
-    parser.add_argument('--max_num_epochs', type=int, default=10)
+    parser.add_argument('--max_num_epochs', type=int, default=20)
     parser.add_argument('--from_checkpoint', type=int, default=0)
 
     args = parser.parse_args()

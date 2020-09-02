@@ -1,17 +1,16 @@
+import h5py
 from torch.utils.data.dataset import Dataset
 from scipy.ndimage import find_objects
 
 
 class EmbryoDataset(Dataset):
-    def __init__(self, indices, segm_data, transforms,
-                 membrane_data=None, myosin_data=None):
-        if membrane_data: assert membrane_data.shape == segm_data.shape
-        if myosin_data: assert myosin_data.shape == segm_data.shape
+    def __init__(self, indices, data_file, timeframe, transforms):
+        with h5py.File(data_file, 'r') as f:
+            self.membrane_data = f['membranes'][timeframe]
+            self.myosin_data = f['myosin'][timeframe]
+            self.segm_data = f['segmentation'][timeframe]
         self.indices = indices
-        self.segm_data = segm_data
-        self.membrane_data = membrane_data
-        self.myosin_data = myosin_data
-        self.bbs = self.get_bbs(segm_data)
+        self.bbs = self.get_bbs(self.segm_data)
         self.transforms = transforms
 
     def get_bbs(self, segm_image):
@@ -24,7 +23,7 @@ class EmbryoDataset(Dataset):
         return len(self.indices)
 
 
-class ClassEmbryoDataset(EmbryoDataset):
+class ClassSegmDataset(EmbryoDataset):
     def __init__(self, class_labels, **kwargs):
         super().__init__(**kwargs)
         assert isinstance(class_labels, dict)
@@ -41,3 +40,15 @@ class ClassEmbryoDataset(EmbryoDataset):
         cell_class = self.class_labels[cell_id]
         cell_mask = self.segm_data[self.bbs[cell_id]] == cell_id
         return self.transforms(cell_mask), self.norm_label(cell_class)
+
+
+class ClassMyoDataset(ClassSegmDataset):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def __getitem__(self, idx):
+        cell_id = self.indices[idx]
+        cell_class = self.class_labels[cell_id]
+        cell_mask = self.segm_data[self.bbs[cell_id]] == cell_id
+        myo_mask = self.myosin_data[self.bbs[cell_id]] * cell_mask
+        return self.transforms(myo_mask), self.norm_label(cell_class)
