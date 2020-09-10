@@ -5,7 +5,7 @@ from inferno.io.transform import Compose
 from inferno.io.transform import generic as gen_transf
 from inferno.io.transform import image as img_transf
 from inferno.utils.io_utils import yaml2dict
-from embryo_dset import ClassSegmDataset, ClassMyoDataset
+from embryo_dset import *
 
 
 def get_train_val_split(labels, split=0.2, r_seed=None):
@@ -51,17 +51,28 @@ class EmbryoDataloader():
         self.data_path = self.config.get('data_path')
         table_path = self.config.get('table_path')
         data_table = pd.read_csv(table_path)
-        self.tf2ids = self.get_tf_dict(data_table)
         self.id2row = self.get_row_dict(data_table)
-        self.tf = self.config.get('timeframe', None)
+        self.tf = self.config.get('timeframe', slice(None, None))
         self.transforms = [get_transforms(self.config.get(key))
                            for key in ['train_transforms', 'val_transforms']]
         self.basic_trfs = get_transforms(self.config.get('basic_transforms'))
         mode = self.config.get('training_type', 'segm_class')
-        if mode == 'myo_class':
-            self.dset = ClassMyoDataset
-        else:
+        if mode == 'segm_class':
             self.dset = ClassSegmDataset
+        elif mode == 'myo_class':
+            self.dset = ClassMyoDataset
+        elif mode == 'align_segm_class':
+            self.dset = ClassAlignSegmDataset
+        elif mode == 'align_myo_class':
+            self.dset = ClassAlignMyoDataset
+
+        if mode.startswith('align'):
+            myo_c = self.config.get('myo_concentration')
+            thres = self.config.get('reject_threshold', 0.2)
+            self.labels = self.get_samestage_cells(data_table, myo_conc=myo_c, tolerance=thres)
+        else:
+            tf2ids = self.get_tf_dict(data_table)
+            self.labels = tf2ids[self.tf]
 
     def get_tf_dict(self, table):
         tf_dict = {}
@@ -78,8 +89,19 @@ class EmbryoDataloader():
             row_dict[i] = row[0]
         return row_dict
 
+    def get_samestage_cells(self, table, myo_conc, tolerance=0.2):
+        cell2tf = {}
+        for idx in table['new_id'].unique():
+            idx_data = table[table['new_id'] == idx]
+            closest_entry = idx_data.iloc[np.argmin(np.array(np.abs(idx_data['concentration_myo'] - myo_conc)))]
+            tf, conc_myo = closest_entry['frame_nb'], closest_entry['concentration_myo']
+            if np.abs(conc_myo - myo_conc) / myo_conc <= tolerance:
+                cell2tf[idx] = tf
+        cell2tf = np.array(list(cell2tf.items()))
+        return cell2tf
+
     def get_class_loaders(self):
-        split_labels = get_train_val_split(self.tf2ids[self.tf])
+        split_labels = get_train_val_split(self.labels)
         cell_dsets = [self.dset(class_labels=self.id2row, indices=lbls, timeframe=self.tf,
                                 data_file=self.data_path, transforms=trfs,
                                 **self.config.get('dataset_kwargs', {}))
@@ -89,7 +111,7 @@ class EmbryoDataloader():
         return train_loader, val_loader
 
     def get_predict_loader(self):
-        lbls = self.tf2ids[self.tf]
+        lbls = self.labels
         trfs = self.basic_trfs
         cell_dset = self.dset(class_labels=self.id2row, indices=lbls, timeframe=self.tf,
                               data_file=self.data_path, transforms=trfs,
