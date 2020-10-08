@@ -3,7 +3,6 @@ import os
 import sys
 import logging
 import argparse
-import torch
 from torch import nn
 from inferno.trainers.basic import Trainer
 from inferno.trainers.callbacks.logging.tensorboard import TensorboardLogger
@@ -53,7 +52,7 @@ def set_up_training(project_directory, config):
         .build_optimizer(**config.get('training_optimizer_kwargs'))\
         .evaluate_metric_every('never')\
         .validate_every((config.get('validate_every', 20), 'iterations'),
-                         for_num_iterations=config.get('validate_for', 5))\
+                        for_num_iterations=config.get('validate_for', 5))\
         .register_callback(SaveAtBestValidationScore(smoothness=smoothness, verbose=True))\
         .build_metric(metric)\
         .register_callback(AutoLR(factor=0.98,
@@ -74,13 +73,12 @@ def set_up_training(project_directory, config):
 
 
 def training(project_directory, train_configuration_file,
-             data_configuration_file, max_num_epochs, from_checkpoint):
+             data_configuration_file, device, from_checkpoint):
 
     logger.info("Loading config from {}.".format(train_configuration_file))
     config = yaml2dict(train_configuration_file)
-    if config.get('devices'):
-        logger.info("Using devices {}".format(config.get('devices')))
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(config.get('devices')[0])
+    logger.info("Using devices {}".format(device))
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(device)
     if from_checkpoint:
         trainer = Trainer().load(from_directory=project_directory,
                                  filename='Weights/checkpoint.pytorch')
@@ -90,16 +88,15 @@ def training(project_directory, train_configuration_file,
     logger.info("Loading training and validation data loader from %s." % data_configuration_file)
     train_loader, validation_loader = EmbryoDataloader(data_configuration_file).get_class_loaders()
 
-    trainer.set_max_num_epochs(max_num_epochs)
+    trainer.set_max_num_epochs(config.get('num_epochs', 20))
 
     logger.info("Binding loaders to trainer.")
     trainer.bind_loader('train', train_loader).bind_loader(
                         'validate', validation_loader)
 
-    if config.get('devices'):
-        trainer.cuda([0])
-        trainer.apex_opt_level = config.get('opt_level', "O1")
-        trainer.mixed_precision = config.get('mixed_precision', "False")
+    trainer.cuda([0])
+    trainer.apex_opt_level = config.get('opt_level', "O1")
+    trainer.mixed_precision = config.get('mixed_precision', "False")
 
     trainer.pickle_module = 'dill'
     logger.info("Lift off!")
@@ -114,7 +111,7 @@ def training(project_directory, train_configuration_file,
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('project_directory', type=str)
-    parser.add_argument('--max_num_epochs', type=int, default=20)
+    parser.add_argument('--device', type=int, default=0)
     parser.add_argument('--from_checkpoint', type=int, default=0)
 
     args = parser.parse_args()
@@ -126,7 +123,7 @@ def main():
     data_config = os.path.join(project_directory, 'data_config.yml')
 
     training(project_directory, train_config, data_config,
-             max_num_epochs=args.max_num_epochs, from_checkpoint=args.from_checkpoint)
+             device=args.device, from_checkpoint=args.from_checkpoint)
 
 
 if __name__ == '__main__':

@@ -8,34 +8,34 @@ ALL_ROWS = [3, 4, 5, 6, 7, 8]
 
 
 class EmbryoDataset(Dataset):
-    def __init__(self, indices, data_file, timeframe, transforms):
+    def __init__(self, indices, class_labels, data_file, timeframe, transforms):
         with h5py.File(data_file, 'r') as f:
             self.membrane_data = f['membranes'][timeframe]
             self.myosin_data = f['myosin'][timeframe]
             self.segm_data = f['segmentation'][timeframe]
+        assert isinstance(class_labels, dict)
+        self.class_labels = class_labels
         self.indices = indices
-        self.bbs = self.get_bbs(self.segm_data)
         self.transforms = transforms
+
+    def __len__(self):
+        return len(self.indices)
+
+    # if we train as regression, not classification, it makes sense to normalize the classes
+    def norm_label(self, label):
+        return (label - min(ALL_ROWS)) / (max(ALL_ROWS) - min(ALL_ROWS))
+
+
+class ClassSegmDataset(EmbryoDataset):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.bbs = self.get_bbs(self.segm_data)
 
     def get_bbs(self, segm_image):
         bbs = find_objects(segm_image)
         # find_objects ignores label 0, but it's handy to index like this
         bbs.insert(0, None)
         return bbs
-
-    def __len__(self):
-        return len(self.indices)
-
-
-class ClassSegmDataset(EmbryoDataset):
-    def __init__(self, class_labels, **kwargs):
-        super().__init__(**kwargs)
-        assert isinstance(class_labels, dict)
-        self.class_labels = class_labels
-
-    # we train as regression, not classification, so it makes sense to normalize the classes
-    def norm_label(self, label):
-        return (label - min(ALL_ROWS)) / (max(ALL_ROWS) - min(ALL_ROWS))
 
     def __getitem__(self, idx):
         cell_id = self.indices[idx]
@@ -56,12 +56,13 @@ class ClassMyoDataset(ClassSegmDataset):
         return self.transforms(myo_mask), self.norm_label(cell_class)
 
 
-class ClassAlignSegmDataset(ClassSegmDataset):
+class ClassAlignSegmDataset(EmbryoDataset):
     def __init__(self, indices, *args, **kwargs):
         # we expect [idx, tf]
         assert indices.shape[-1] == 2
         self.idx2tf = {idx: tf for idx, tf in indices}
         super().__init__(*args, indices=indices[:, 0], **kwargs)
+        self.bbs = self.get_bbs(self.segm_data)
         rows_present = set([self.class_labels[i] for i in indices[:, 0]])
         # we need to make sure we have all classes present
         print("The number of samples per class is \n",
@@ -69,8 +70,8 @@ class ClassAlignSegmDataset(ClassSegmDataset):
         assert all(i in rows_present for i in ALL_ROWS)
 
     def get_bbs(self, segm_volume):
-        idx2bb = {idx : find_objects(segm_volume[row] == idx)[0]
-                  for idx, row in self.idx2tf.items()}
+        idx2bb = {idx : find_objects(segm_volume[tf] == idx)[0]
+                  for idx, tf in self.idx2tf.items()}
         return idx2bb
 
     def __getitem__(self, idx):
