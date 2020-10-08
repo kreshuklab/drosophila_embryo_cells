@@ -31,26 +31,33 @@ def remap_segm(segm_timepoints, data_frame):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Convert tiff data to h5')
-    parser.add_argument('raw_tif_file', type=str,
-                        help='tif file with raw data')
-    parser.add_argument('tif_folder', type=str,
-                        help='path to segmentation tifs')
-    parser.add_argument('tracking_csv', type=str,
-                        help='table with tracking output')
-    parser.add_argument('out_h5', type=str,
-                        help='output file')
+    parser.add_argument('data_path', type=str,
+                        help='folder with the data')
+    parser.add_argument('sample_num', type=int, choices=[5, 6, 24],
+                        help='the sample number')
     args = parser.parse_args()
 
-    raw_data = imread(args.raw_tif_file)[2:33]
-    segmentation = get_segm(args.tif_folder)
+    raw_tif_file = os.path.join(args.data_path, 'Img{}_SUM.tif'.format(args.sample_num))
+    segm_folder = os.path.join(args.data_path, 'Img{}_segmentation/'.format(args.sample_num))
+    tracking_csv = os.path.join(args.data_path, 'img{}_full.csv'.format(args.sample_num))
+    out_h5 = os.path.join(args.data_path, 'img{}.h5'.format(args.sample_num))
 
-    data_table = pd.read_csv(args.tracking_csv)
+    raw_data = imread(raw_tif_file)
+    segmentation = get_segm(segm_folder)
+    data_table = pd.read_csv(tracking_csv)
 
     remapped_segmentation, id_map = remap_segm(segmentation, data_table)
     data_table['new_id'] = [id_map[key] for key in data_table['track_id_cells']]
-    data_table.to_csv(args.tracking_csv, index=False)
+    data_table.to_csv(tracking_csv, index=False)
 
-    with h5py.File(args.out_h5, 'w') as f:
+    if args.sample_num == 5:
+        raw_data = raw_data[2:33]
+    elif args.sample_num == 6:
+        raw_data = raw_data[:23]
+    elif args.sample_num == 24:
+        raw_data = raw_data[:31]
+
+    with h5py.File(out_h5, 'w') as f:
         _ = f.create_dataset('membranes', data=raw_data[:, 0], compression='gzip')
         _ = f.create_dataset('myosin', data=raw_data[:, 1], compression='gzip')
         _ = f.create_dataset('segmentation', data=remapped_segmentation, compression='gzip')

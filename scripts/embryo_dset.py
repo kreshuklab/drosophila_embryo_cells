@@ -64,7 +64,7 @@ class ClassAlignSegmDataset(ClassSegmDataset):
         super().__init__(*args, indices=indices[:, 0], **kwargs)
         rows_present = set([self.class_labels[i] for i in indices[:, 0]])
         # we need to make sure we have all classes present
-        print("The number of samples per class is /n",
+        print("The number of samples per class is \n",
               np.unique([self.class_labels[i] for i in indices[:, 0]], return_counts=True))
         assert all(i in rows_present for i in ALL_ROWS)
 
