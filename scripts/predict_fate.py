@@ -6,15 +6,34 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.stats import linregress
 from skimage.future import graph
+from skimage.measure import regionprops
 from sklearn.linear_model import LinearRegression
 
 
-def get_myo_around(idx, tf, n=10):
+def get_myo_around(idx, tf, n=10, exclude=None, cut=None):
     no_cell_mask = segmentation[tf] != idx
     dist_tr = distance_transform_edt(no_cell_mask)
     mask_around = (dist_tr <= n) * no_cell_mask
+    if exclude is not None:
+        assert cut is not None
+        myo_around = cut_doughnut(mask_around, np.invert(no_cell_mask), cut, exclude)
     myo_around = myosin[tf] * mask_around
     return np.sum(myo_around) / np.sum(mask_around) * 0.0148
+
+
+def cut_doughnut(myo_mask, cell_mask, line='h', excl='in'):
+    x_min, y_min, x_max, y_max = regionprops(cell_mask.astype(int))[0]['bbox']
+    if line == 'h' and excl == 'in':
+        myo_mask[x_min:x_max] = 0
+    if line == 'h' and excl == 'out':
+        myo_mask[:x_min] = 0
+        myo_mask[x_max:] = 0
+    if line == 'v' and excl == 'in':
+        myo_mask[:, y_min:y_max] = 0
+    if line == 'v' and excl == 'out':
+        myo_mask[:, :y_min] = 0
+        myo_mask[:, y_max:] = 0
+    return myo_mask
 
 
 def get_myo_in(idx, tf):
@@ -56,15 +75,15 @@ def get_size_and_myo_dict(table, myo_s=3, area_s=3):
     return all_myo_conc, all_sizes, idx2row
 
 
-def get_myo_time_points(myo_conc, sizes, row_nums, myo_tp=3):
+def get_myo_time_points(myo_conc, sizes, row_nums, ex=None, plane=None):
     points_list = []
     for idx in myo_conc.keys():
         tps = myo_conc[idx].keys()
-        for tp in range(min(tps) - 1 + myo_tp, max(tps) - 1):
+        for tp in range(min(tps), max(tps) - 1):
             if idx not in segmentation[tp] or idx not in segmentation[tp + 1]: continue
             size_change = sizes[idx][tp + 1] / sizes[idx][tp]
             cell_myo = myo_conc[idx][tp]
-            nbr_myo = np.mean([get_myo_around(idx, i, n=70) for i in range(tp, tp - myo_tp, -1)])
+            nbr_myo = get_myo_around(idx, tp, 70, ex, plane)
             points_list.append([size_change, cell_myo, nbr_myo, row_nums[idx]])
     return np.array(points_list)
 
@@ -99,7 +118,7 @@ with h5py.File(data_h5, 'r') as f:
 
 data_table = pd.read_csv(tracking_csv)
 myo, area, rows = get_size_and_myo_dict(data_table, myo_s=3, area_s=3)
-to_plot = get_myo_time_points(myo, area, rows, 1)
+to_plot = get_myo_time_points(myo, area, rows, 'in', 'h')
 get_best_regr(to_plot, 400)
 
 ## the loglog plot
