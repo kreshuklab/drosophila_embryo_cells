@@ -10,6 +10,18 @@ from skimage.measure import regionprops
 from sklearn.linear_model import LinearRegression
 
 
+def remove_border_cells(segm, data_frame):
+    segm_borders = segm.copy()
+    segm_borders[:, 2:-2, 2:-2] = 0
+    for tf in range(len(segm)):
+        border_cells = np.unique(segm_borders[tf])
+        border_cells = border_cells[border_cells!=0]
+        print(tf, border_cells)
+        for cell in border_cells:
+            data_frame = data_frame[~((data_frame['frame_nb'] == tf) & (data_frame['new_id'] == cell))]
+    return data_frame
+
+
 def get_myo_around(idx, tf, n=10, exclude=None, cut=None):
     no_cell_mask = segmentation[tf] != idx
     dist_tr = distance_transform_edt(no_cell_mask)
@@ -66,7 +78,7 @@ def get_size_and_myo_dict(table, myo_s=3, area_s=3):
         tps, myo, area = [np.array(idx_data[k])
                           for k in ['frame_nb', 'concentration_myo', 'area_cells']]
         if len(tps) < 5: continue
-        #myo = [get_myo_in(idx, tp) for tp in tps]
+        myo = [get_myo_in(idx, tp) for tp in tps]
         myo = smooth(myo, sigma=myo_s, tolerance=1)
         area = smooth(area, sigma=area_s, tolerance=0.1)
         all_myo_conc[idx] = {t: m for t, m in zip(tps[1:-1], myo)}
@@ -80,7 +92,7 @@ def get_myo_time_points(myo_conc, sizes, row_nums, ex=None, plane=None):
     for idx in myo_conc.keys():
         tps = myo_conc[idx].keys()
         for tp in range(min(tps), max(tps) - 1):
-            if idx not in segmentation[tp] or idx not in segmentation[tp + 1]: continue
+            if tp not in tps or tp+1 not in tps: continue
             size_change = sizes[idx][tp + 1] / sizes[idx][tp]
             cell_myo = myo_conc[idx][tp]
             nbr_myo = get_myo_around(idx, tp, 70, ex, plane)
@@ -117,22 +129,28 @@ with h5py.File(data_h5, 'r') as f:
     segmentation = f['segmentation'][:]
 
 data_table = pd.read_csv(tracking_csv)
+data_table = remove_border_cells(segmentation, data_table)
 myo, area, rows = get_size_and_myo_dict(data_table, myo_s=3, area_s=3)
-to_plot = get_myo_time_points(myo, area, rows, 'in', 'h')
+to_plot = get_myo_time_points(myo, area, rows)
+to_plot = to_plot[~np.isnan(to_plot).any(axis=1)] # WHY DOES this happen?
 get_best_regr(to_plot, 400)
+
 
 ## the loglog plot
 plt.scatter(to_plot[:, 1], to_plot[:, 2], c=to_plot[:, 0], cmap='RdYlGn', vmin=0.9, vmax=1.1)
+plt.plot([1,180], [1,180], c='black', linewidth=0.5)
 plt.xlabel("Cell's myosin concentration (log)", size=25)
 plt.ylabel("Myosin concentration in the neighborhood (log)", size=25)
+plt.xlim(0.9, 300)
+plt.ylim(0.7, 190)
 plt.loglog()
 plt.colorbar()
 plt.show()
 
 
-# the zoom in plot oclored by rows
+# the zoom in plot colored by rows
 color_dict = {3:'magenta', 4:'indigo', 5:'skyblue', 6:'mediumseagreen', 7:'red', 8:'orange'}
-plot_cutout = to_plot[(3 < to_plot[:, 1]) & (to_plot[:, 1] < 4)]
+plot_cutout = to_plot[(18 < to_plot[:, 1]) & (to_plot[:, 1] < 22)]
 slope, intercept, rvalue, _, _ = linregress(np.log(plot_cutout[:, 2]), plot_cutout[:, 0])
 y = intercept + slope * np.log(plot_cutout[:, 2])
 plt.plot(np.log(plot_cutout[:, 2]), y, 'red', label='linear fit')
@@ -143,17 +161,32 @@ for row in np.unique(to_plot[:, 3]):
 
 plt.ylabel("Relative size change", size=25)
 plt.xlabel("Myosin concentration in the neighborhood (log)", size=25)
-plt.text(3.3, 0.94, "Correlation=0.723", size=20)
+plt.text(3.3, 0.94, "Correlation=0.752", size=20)
 plt.legend(loc='upper left', fontsize=15)
 plt.show()
+
 
 # the loglog plot for each row separately
 for i in np.unique(to_plot[:, 3]):
     row_data = to_plot[to_plot[:, 3] == i]
     plt.scatter(row_data[:, 1], row_data[:, 2], c=row_data[:, 0], cmap='RdYlGn', vmin=0.9, vmax=1.1)
+    plt.plot([1,180], [1,180], c='black', linewidth=0.5)
     plt.xlabel("Cell's myosin concentration (log)", size=25)
     plt.ylabel("Myosin concentration in the neighborhood (log)", size=25)
     plt.title("Row {}".format(int(i)), size=30)
+    plt.xlim(0.9, 300)
+    plt.ylim(0.7, 190)
     plt.loglog()
     plt.colorbar()
     plt.show()
+
+
+# the ratio vs size change plot
+for row in np.unique(to_plot[:, 3]):
+    row_data = to_plot[to_plot[:, 3] == row]
+    plt.scatter(row_data[:, 1] / row_data[:, 2], row_data[:, 0], c=color_dict[row], label="Row {}".format(int(row)))
+
+plt.xlabel("Cell's myosin concentration (log)", size=25)
+plt.ylabel("Myosin concentration in the neighborhood (log)", size=25)
+plt.legend(loc='lower right', fontsize=15)
+plt.show()
