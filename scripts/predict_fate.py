@@ -33,6 +33,19 @@ def get_myo_around(idx, tf, n=10, exclude=None, cut=None):
     return np.sum(myo_around) / np.sum(mask_around) * 0.0148
 
 
+def show_myo(idx, tf, n=70):
+    no_cell_mask = segmentation[tf] != idx
+    cell_mask = segmentation[tf] == idx
+    dist_tr = distance_transform_edt(no_cell_mask)
+    cell_countour = (dist_tr <= 1) * no_cell_mask
+    mask_around = (dist_tr <= n) * no_cell_mask
+    myo_around = myosin[tf] * mask_around
+    myo_in = myosin[tf] * cell_mask
+    viewer = napari.Viewer()
+    viewer.add_image(cell_countour, blending='additive')
+    viewer.add_image(myo_around + myo_in, blending='additive')
+
+
 def cut_doughnut(myo_mask, cell_mask, line='h', excl='in'):
     x_min, y_min, x_max, y_max = regionprops(cell_mask.astype(int))[0]['bbox']
     if line == 'h' and excl == 'in':
@@ -73,7 +86,7 @@ def get_size_and_myo_dict(table, myo_s=3, area_s=3):
     for idx in table['new_id'].unique():
         #if idx in (79, 81): continue
         idx_data = table[table['new_id'] == idx]
-        idx_data = idx_data[idx_data['frame_nb'] > 2]
+        idx_data = idx_data[idx_data['frame_nb'] >= 2]
         row = idx_data['row_id'].unique()[0]
         tps, myo, area = [np.array(idx_data[k])
                           for k in ['frame_nb', 'concentration_myo', 'area_cells']]
@@ -137,8 +150,8 @@ get_best_regr(to_plot, 400)
 
 
 ## the loglog plot
-plt.scatter(to_plot[:, 1], to_plot[:, 2], c=to_plot[:, 0], cmap='RdYlGn', vmin=0.9, vmax=1.1)
-plt.plot([1,180], [1,180], c='black', linewidth=0.5)
+plt.scatter(to_plot[:, 1], to_plot[:, 2], c=to_plot[:, 0], cmap='RdYlBu', vmin=0.9, vmax=1.1)
+#plt.plot([1,180], [1,180], c='black', linewidth=0.5)
 plt.xlabel("Cell's myosin concentration (log)", size=25)
 plt.ylabel("Myosin concentration in the neighborhood (log)", size=25)
 plt.xlim(0.9, 300)
@@ -161,7 +174,7 @@ for row in np.unique(to_plot[:, 3]):
 
 plt.ylabel("Relative size change", size=25)
 plt.xlabel("Myosin concentration in the neighborhood (log)", size=25)
-plt.text(3.3, 0.94, "Correlation=0.752", size=20)
+plt.text(3.3, 0.94, "Correlation=0.7478", size=20)
 plt.legend(loc='upper left', fontsize=15)
 plt.show()
 
@@ -186,7 +199,35 @@ for row in np.unique(to_plot[:, 3]):
     row_data = to_plot[to_plot[:, 3] == row]
     plt.scatter(row_data[:, 1] / row_data[:, 2], row_data[:, 0], c=color_dict[row], label="Row {}".format(int(row)))
 
-plt.xlabel("Cell's myosin concentration (log)", size=25)
-plt.ylabel("Myosin concentration in the neighborhood (log)", size=25)
+plt.xlabel("Myosin concentration inside / outside", size=25)
+plt.ylabel("Relative size change", size=25)
 plt.legend(loc='lower right', fontsize=15)
+plt.show()
+
+
+# the bar plot plot of exp and constr
+num_pos, num_mid, num_neg = [], [], []
+ratio = to_plot[:, 1] / to_plot[:, 2]
+min_value = np.min(ratio)
+max_value = np.max(ratio)
+
+values_range = np.arange(0, 5.5, 0.25)
+for i in range(len(values_range) - 1):
+    range_data = to_plot[np.where((ratio > values_range[i]) & (ratio < values_range[i + 1]))]
+    num_pos.append(np.sum(range_data[:, 0] > 1.025))
+    #num_mid.append(np.sum((range_data[:, 0] < 1.025) & (range_data[:, 0] > 0.95)))
+    num_neg.append(np.sum(range_data[:, 0] < 0.975))
+
+width = 0.35
+labels = ["{}-{}".format(values_range[i], values_range[i + 1]) for i in range(len(values_range) - 1)]
+x = np.arange(len(num_pos))
+fig, ax = plt.subplots()
+rects1 = ax.bar(x - width / 2, num_pos, width, label='Expanding', color='tab:blue')
+#rects1 = ax.bar(x, num_mid, width, label='Middle')
+rects2 = ax.bar(x + width / 2, num_neg, width, label='Constricting', color='tab:red')
+ax.set_xticks(x)
+ax.set_xticklabels(labels)
+ax.set_ylabel('Number of cells', size=25)
+ax.set_xlabel('Ratio in/out myosin', size=25)
+ax.legend(fontsize=15)
 plt.show()

@@ -3,6 +3,7 @@ data
 imgs
 info
 trainings
+ilastik
 try*
 tmp*
 *.csv
