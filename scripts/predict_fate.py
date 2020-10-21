@@ -37,12 +37,13 @@ def show_myo(idx, tf, n=70):
     no_cell_mask = segmentation[tf] != idx
     cell_mask = segmentation[tf] == idx
     dist_tr = distance_transform_edt(no_cell_mask)
-    cell_countour = (dist_tr <= 1) * no_cell_mask
+    cell_countour = (dist_tr <= 2) * no_cell_mask
+    myo_countour = (dist_tr < n+1) * (dist_tr > n-1)
     mask_around = (dist_tr <= n) * no_cell_mask
     myo_around = myosin[tf] * mask_around
     myo_in = myosin[tf] * cell_mask
     viewer = napari.Viewer()
-    viewer.add_image(cell_countour, blending='additive')
+    viewer.add_image(cell_countour + myo_countour, blending='additive')
     viewer.add_image(myo_around + myo_in, blending='additive')
 
 
@@ -152,6 +153,8 @@ get_best_regr(to_plot, 400)
 ## the loglog plot
 plt.scatter(to_plot[:, 1], to_plot[:, 2], c=to_plot[:, 0], cmap='RdYlBu', vmin=0.9, vmax=1.1)
 #plt.plot([1,180], [1,180], c='black', linewidth=0.5)
+plt.vlines([18, 22], 5, 48, linestyles='dotted')
+plt.hlines([5, 48], 18, 22, linestyles='dotted')
 plt.xlabel("Cell's myosin concentration (log)", size=25)
 plt.ylabel("Myosin concentration in the neighborhood (log)", size=25)
 plt.xlim(0.9, 300)
@@ -179,6 +182,24 @@ plt.legend(loc='upper left', fontsize=15)
 plt.show()
 
 
+# the zoom in plot colored by size
+plot_cutout = to_plot[(18 < to_plot[:, 1]) & (to_plot[:, 1] < 22)]
+slope, intercept, rvalue, _, _ = linregress(plot_cutout[:, 0], np.log(plot_cutout[:, 2]))
+y = intercept + slope * plot_cutout[:, 0]
+fig, ax = plt.subplots()
+ax.plot(plot_cutout[:, 0], y, 'red', label='linear fit')
+#ax.scatter(plot_cutout[:, 0], np.log(plot_cutout[:, 2]), s=80, c=plot_cutout[:, 0], cmap='RdYlBu')
+ax.scatter(plot_cutout[:, 0], np.log(plot_cutout[:, 2]), s=80, c='tab:grey')
+plt.xlabel("Relative size change", size=25)
+plt.ylabel("Myosin concentration in the neighborhood (log)", size=25)
+plt.text(1.06, 1.98, "Correlation=0.7478", size=20)
+plt.legend(loc='upper left', fontsize=25)
+[tick.label.set_fontsize(15) for tick in ax.xaxis.get_major_ticks()]
+[tick.label.set_fontsize(15) for tick in ax.yaxis.get_major_ticks()]
+plt.show()
+
+
+
 # the loglog plot for each row separately
 for i in np.unique(to_plot[:, 3]):
     row_data = to_plot[to_plot[:, 3] == i]
@@ -195,10 +216,17 @@ for i in np.unique(to_plot[:, 3]):
 
 
 # the ratio vs size change plot
-for row in np.unique(to_plot[:, 3]):
-    row_data = to_plot[to_plot[:, 3] == row]
-    plt.scatter(row_data[:, 1] / row_data[:, 2], row_data[:, 0], c=color_dict[row], label="Row {}".format(int(row)))
-
+exp = to_plot[np.where(to_plot[:, 0] > 1.025)]
+constr = to_plot[np.where(to_plot[:, 0] < 0.975)]
+middle = to_plot[np.where((to_plot[:, 0] >= 0.975) & (to_plot[:, 0] <= 1.025))]
+fig, ax = plt.subplots()
+ax.scatter(exp[:, 1] / exp[:, 2], exp[:, 0], c='tab:blue')
+ax.scatter(constr[:, 1] / constr[:, 2], constr[:, 0], c='tab:red')
+ax.scatter(middle[:, 1] / middle[:, 2], middle[:, 0], c='y')
+ax.hlines(1, 0.4, 4.9)
+ax.vlines(1, 0.83, 1.10)
+[tick.label.set_fontsize(15) for tick in ax.xaxis.get_major_ticks()]
+[tick.label.set_fontsize(15) for tick in ax.yaxis.get_major_ticks()]
 plt.xlabel("Myosin concentration inside / outside", size=25)
 plt.ylabel("Relative size change", size=25)
 plt.legend(loc='lower right', fontsize=15)
@@ -211,7 +239,7 @@ ratio = to_plot[:, 1] / to_plot[:, 2]
 min_value = np.min(ratio)
 max_value = np.max(ratio)
 
-values_range = np.arange(0, 5.5, 0.25)
+values_range = np.arange(0.25, 5.25, 0.25)
 for i in range(len(values_range) - 1):
     range_data = to_plot[np.where((ratio > values_range[i]) & (ratio < values_range[i + 1]))]
     num_pos.append(np.sum(range_data[:, 0] > 1.025))
@@ -229,5 +257,13 @@ ax.set_xticks(x)
 ax.set_xticklabels(labels)
 ax.set_ylabel('Number of cells', size=25)
 ax.set_xlabel('Ratio in/out myosin', size=25)
-ax.legend(fontsize=15)
+ax.legend(loc='upper left', fontsize=15)
+plt.show()
+
+sm_range = np.arange(0.25, 5.25, 0.125)
+plt.hist(exp[:, 1] / exp[:, 2], bins=sm_range, density=True, histtype='bar', label='Expanding', color='tab:blue', alpha=0.6)
+plt.hist(constr[:, 1] / constr[:, 2], bins=sm_range, density=True, histtype='bar', label='Constricting', color='tab:red', alpha=0.6)
+plt.ylabel('Cells density', size=25)
+plt.xlabel('Ratio in/out myosin', size=25)
+plt.legend(loc='upper left', fontsize=15)
 plt.show()
