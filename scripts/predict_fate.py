@@ -30,7 +30,7 @@ def get_myo_around(idx, tf, n=10, exclude=None, cut=None):
         assert cut is not None
         myo_around = cut_doughnut(mask_around, np.invert(no_cell_mask), cut, exclude)
     myo_around = myosin[tf] * mask_around
-    return np.sum(myo_around) / np.sum(mask_around) * 0.0148
+    return np.sum(myo_around) / np.sum(mask_around) * 0.0148 / 5.955
 
 
 def show_myo(idx, tf, n=70):
@@ -65,7 +65,7 @@ def cut_doughnut(myo_mask, cell_mask, line='h', excl='in'):
 def get_myo_in(idx, tf):
     cell_mask = segmentation[tf] == idx
     myo_in = myosin[tf] * cell_mask
-    return np.sum(myo_in) / np.sum(cell_mask) * 0.0148
+    return np.sum(myo_in) / np.sum(cell_mask) * 0.0148 / 5.955
 
 
 def smooth(values, sigma=3, tolerance=0.1):
@@ -151,14 +151,14 @@ get_best_regr(to_plot, 400)
 
 
 ## the loglog plot
-plt.scatter(to_plot[:, 1], to_plot[:, 2], c=to_plot[:, 0], cmap='RdYlBu', vmin=0.9, vmax=1.1)
+plt.scatter(to_plot[:, 1], to_plot[:, 2], c=to_plot[:, 0], cmap='RdYlBu', vmin=0.9, vmax=1.1, s=20)
 #plt.plot([1,180], [1,180], c='black', linewidth=0.5)
-plt.vlines([18, 22], 5, 48, linestyles='dotted')
-plt.hlines([5, 48], 18, 22, linestyles='dotted')
+plt.vlines([18/5.955, 22/5.955], 5/5.955, 48/5.955, linestyles='dotted')
+plt.hlines([5/5.955, 48/5.955], 18/5.955, 22/5.955, linestyles='dotted')
 plt.xlabel("Cell's myosin concentration (log)", size=25)
 plt.ylabel("Myosin concentration in the neighborhood (log)", size=25)
-plt.xlim(0.9, 300)
-plt.ylim(0.7, 190)
+#plt.xlim(0.9, 300)
+#plt.ylim(0.7, 190)
 plt.loglog()
 plt.colorbar()
 plt.show()
@@ -183,16 +183,16 @@ plt.show()
 
 
 # the zoom in plot colored by size
-plot_cutout = to_plot[(18 < to_plot[:, 1]) & (to_plot[:, 1] < 22)]
+plot_cutout = to_plot[(18/5.955 < to_plot[:, 1]) & (to_plot[:, 1] < 22/5.955)]
 slope, intercept, rvalue, _, _ = linregress(plot_cutout[:, 0], np.log(plot_cutout[:, 2]))
 y = intercept + slope * plot_cutout[:, 0]
 fig, ax = plt.subplots()
 ax.plot(plot_cutout[:, 0], y, 'red', label='linear fit')
-#ax.scatter(plot_cutout[:, 0], np.log(plot_cutout[:, 2]), s=80, c=plot_cutout[:, 0], cmap='RdYlBu')
-ax.scatter(plot_cutout[:, 0], np.log(plot_cutout[:, 2]), s=80, c='tab:grey')
+#ax.scatter(plot_cutout[:, 0], np.log(plot_cutout[:, 2]), s=160, c=plot_cutout[:, 0], cmap='RdYlBu')
+ax.scatter(plot_cutout[:, 0], np.log(plot_cutout[:, 2]), s=200, c='tab:grey')
 plt.xlabel("Relative size change", size=25)
 plt.ylabel("Myosin concentration in the neighborhood (log)", size=25)
-plt.text(1.06, 1.98, "Correlation=0.7478", size=20)
+plt.text(1.06, 0.15, "Correlation=0.7478", size=20)
 plt.legend(loc='upper left', fontsize=25)
 [tick.label.set_fontsize(15) for tick in ax.xaxis.get_major_ticks()]
 [tick.label.set_fontsize(15) for tick in ax.yaxis.get_major_ticks()]
@@ -216,9 +216,9 @@ for i in np.unique(to_plot[:, 3]):
 
 
 # the ratio vs size change plot
-exp = to_plot[np.where(to_plot[:, 0] > 1.025)]
-constr = to_plot[np.where(to_plot[:, 0] < 0.975)]
-middle = to_plot[np.where((to_plot[:, 0] >= 0.975) & (to_plot[:, 0] <= 1.025))]
+exp = to_plot[np.where(to_plot[:, 0] > 1.015)]
+constr = to_plot[np.where(to_plot[:, 0] < 0.985)]
+middle = to_plot[np.where((to_plot[:, 0] >= 0.985) & (to_plot[:, 0] <= 1.015))]
 fig, ax = plt.subplots()
 ax.scatter(exp[:, 1] / exp[:, 2], exp[:, 0], c='tab:blue')
 ax.scatter(constr[:, 1] / constr[:, 2], constr[:, 0], c='tab:red')
