@@ -21,20 +21,6 @@ def get_myo_around(idx, tf, n=10, exclude=None, cut=None):
     return np.sum(myo_around) / (np.sum(mask_around) * 0.0148)
 
 
-def get_myo_offset(idx, tf, n=70, pts=10):
-    intervals = np.arange(0, n + 1, int(n / pts))
-    no_cell_mask = segmentation[tf] != idx
-    dist_tr = distance_transform_edt(no_cell_mask)
-    concentrations = []
-    for i in range(pts):
-        start, stop = intervals[i], intervals[i+1]
-        mask_around = (start <= dist_tr) & (dist_tr < stop) * no_cell_mask
-        myo_around = myosin[tf] * mask_around
-        concentrations.append(np.sum(myo_around) / (np.sum(mask_around)))
-    concentrations = np.array(concentrations)
-    return np.mean([i * c for i, c in enumerate(concentrations)]) / np.sum(concentrations)
-
-
 def show_myo(idx, tf, n=70):
     no_cell_mask = segmentation[tf] != idx
     cell_mask = segmentation[tf] == idx
@@ -89,7 +75,6 @@ def smooth(values, sigma=3, tolerance=0.1):
 def get_size_and_myo_dict(myo_s=3, area_s=3):
     all_myo_conc = {}
     all_sizes = {}
-    all_offsets = {}
     idx2row = {}
     for idx in np.unique(segmentation):
         if idx == 0: continue
@@ -97,14 +82,11 @@ def get_size_and_myo_dict(myo_s=3, area_s=3):
         if len(tps) < 5: continue
         myo = [get_myo_in(idx, tp) for tp in tps]
         myo = smooth(myo, sigma=myo_s, tolerance=1)
-        offset = [get_myo_offset(idx, tp) for tp in tps]
-        offset = smooth(offset, sigma=area_s, tolerance=1)
         area = [get_area(idx, tp) for tp in tps]
         area = smooth(area, sigma=area_s, tolerance=0.1)
         all_myo_conc[idx] = {t: m for t, m in zip(tps[1:-1], myo)}
         all_sizes[idx] = {t: s for t, s in zip(tps[1:-1], area)}
-        all_offsets[idx] = {t: o for t, o in zip(tps[1:-1], offset)}
-    return all_myo_conc, all_sizes, all_offsets
+    return all_myo_conc, all_sizes
 
 
 def get_myo_time_points(myo_conc, sizes, offs, ex=None, plane=None):
@@ -116,8 +98,7 @@ def get_myo_time_points(myo_conc, sizes, offs, ex=None, plane=None):
             size_change = sizes[idx][tp + 1] / sizes[idx][tp]
             cell_myo = myo_conc[idx][tp]
             nbr_myo = get_myo_around(idx, tp, 70, ex, plane)
-            offset = offs[idx][tp]
-            points_list.append([size_change, cell_myo, nbr_myo, offset, idx, tp])
+            points_list.append([size_change, cell_myo, nbr_myo, idx, tp])
     return np.array(points_list)
 
 
@@ -143,8 +124,8 @@ with h5py.File(data_h5, 'r') as f:
     myosin = f['myosin'][3:-3]
     segmentation = f['segmentation'][3:-3]
 
-myo, area, offsets = get_size_and_myo_dict(myo_s=3, area_s=3)
-to_plot = get_myo_time_points(myo, area, offsets)
+myo, area = get_size_and_myo_dict(myo_s=3, area_s=3)
+to_plot = get_myo_time_points(myo, area)
 get_best_regr(to_plot, 400)
 
 
