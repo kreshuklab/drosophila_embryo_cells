@@ -5,21 +5,18 @@ import matplotlib.pyplot as plt
 from scipy.ndimage.morphology import distance_transform_edt
 
 
-def get_myo_offset(idx, tf, n=70, pts=10):
-    intervals = np.arange(0, n + 1, int(n / pts))
-    no_cell_mask = segmentation[tf] != idx
-    dist_tr = distance_transform_edt(no_cell_mask)
-    concentrations = []
-    for i in range(pts):
-        start, stop = intervals[i], intervals[i+1]
-        mask_around = (start < dist_tr) & (dist_tr <= stop) * no_cell_mask
-        myo_around = myosin[tf] * mask_around
-        concentrations.append(np.sum(myo_around) / (np.sum(mask_around)))
-    concentrations = np.array(concentrations)
-    return np.mean([i * c for i, c in enumerate(concentrations)]) / np.sum(concentrations)
+def get_myo_offset_in(idx, tf):
+    cell_mask = segmentation[tf] == idx
+    com = np.rint(center_of_mass(cell_mask)).astype(int)
+    com_image = np.ones_like(cell_mask)
+    com_image[tuple(com)] = 0
+    dist_tr = distance_transform_edt(com_image) * cell_mask
+    myo_in = myosin[tf] * cell_mask
+    weighed_myo = myo_in * dist_tr
+    return np.sum(weighed_myo) / np.sum(myo_in)
 
 
-def get_myo_offset1(idx, tf, n=70):
+def get_myo_offset_out(idx, tf, n=70):
     no_cell_mask = segmentation[tf] != idx
     dist_tr = distance_transform_edt(no_cell_mask)
     dist_tr_around = dist_tr * (dist_tr <= n) * no_cell_mask
@@ -54,7 +51,7 @@ data_table = remove_border_cells(segmentation, data_table)
 
 offsets = []
 for i, row in data_table.iterrows():
-    offsets.append(get_myo_offset1(row['new_id'], row['frame_nb']) * PIXEL_SIZE)
+    offsets.append(get_myo_offset_out(row['new_id'], row['frame_nb']) * PIXEL_SIZE)
 
 data_table['sur_offsets'] = offsets
 
