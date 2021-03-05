@@ -3,17 +3,29 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.ndimage.morphology import distance_transform_edt
+from skimage.measure import regionprops
+from scipy.ndimage import center_of_mass
 
 
 def get_myo_offset_in(idx, tf):
     cell_mask = segmentation[tf] == idx
-    com = np.rint(center_of_mass(cell_mask)).astype(int)
+    props = regionprops(cell_mask.astype(int))[0]
+    com = np.rint(props.centroid).astype(int)
     com_image = np.ones_like(cell_mask)
     com_image[tuple(com)] = 0
     dist_tr = distance_transform_edt(com_image) * cell_mask
     myo_in = myosin[tf] * cell_mask
     weighed_myo = myo_in * dist_tr
-    return np.sum(weighed_myo) / np.sum(myo_in)
+    return np.sum(weighed_myo) / np.sum(myo_in) / props.major_axis_length
+
+
+def get_myo_offset_diff(idx, tf):
+    cell_mask = segmentation[tf] == idx
+    com_cell = np.rint(center_of_mass(cell_mask)).astype(int)
+    myo_in = myosin[tf] * cell_mask
+    com_myo = np.rint(center_of_mass(myo_in)).astype(int)
+    props = regionprops(cell_mask.astype(int))[0]
+    return np.linalg.norm(com_myo - com_cell)
 
 
 def get_myo_offset_out(idx, tf, n=70):
