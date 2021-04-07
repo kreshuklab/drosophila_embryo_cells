@@ -10,6 +10,16 @@ from skimage.measure import regionprops
 from sklearn.linear_model import LinearRegression
 
 
+def get_myo_offset(idx, tf, n=70):
+    no_cell_mask = segmentation[tf] != idx
+    dist_tr = distance_transform_edt(no_cell_mask)
+    dist_tr_around = dist_tr * (dist_tr <= n) * no_cell_mask
+    mask_around = dist_tr_around > 0
+    myo_around = myosin[tf] * mask_around
+    weighed_myo = myosin[tf] * dist_tr_around
+    return np.sum(weighed_myo) / np.sum(myo_around)
+
+
 def get_myo_around(idx, tf, n=10, exclude=None, cut=None):
     no_cell_mask = segmentation[tf] != idx
     dist_tr = distance_transform_edt(no_cell_mask)
@@ -75,6 +85,7 @@ def smooth(values, sigma=3, tolerance=0.1):
 def get_size_and_myo_dict(myo_s=3, area_s=3):
     all_myo_conc = {}
     all_sizes = {}
+    all_offsets = {}
     idx2row = {}
     for idx in np.unique(segmentation):
         if idx == 0: continue
@@ -82,11 +93,14 @@ def get_size_and_myo_dict(myo_s=3, area_s=3):
         if len(tps) < 5: continue
         myo = [get_myo_in(idx, tp) for tp in tps]
         myo = smooth(myo, sigma=myo_s, tolerance=1)
+        offset = [get_myo_offset(idx, tp) for tp in tps]
+        offset = smooth(offset, sigma=area_s, tolerance=1)
         area = [get_area(idx, tp) for tp in tps]
         area = smooth(area, sigma=area_s, tolerance=0.1)
         all_myo_conc[idx] = {t: m for t, m in zip(tps[1:-1], myo)}
         all_sizes[idx] = {t: s for t, s in zip(tps[1:-1], area)}
-    return all_myo_conc, all_sizes
+        all_offsets[idx] = {t: o for t, o in zip(tps[1:-1], offset)}
+    return all_myo_conc, all_sizes, all_offsets
 
 
 def get_myo_time_points(myo_conc, sizes, offs, ex=None, plane=None):
@@ -98,7 +112,8 @@ def get_myo_time_points(myo_conc, sizes, offs, ex=None, plane=None):
             size_change = sizes[idx][tp + 1] / sizes[idx][tp]
             cell_myo = myo_conc[idx][tp]
             nbr_myo = get_myo_around(idx, tp, 70, ex, plane)
-            points_list.append([size_change, cell_myo, nbr_myo, idx, tp])
+            offset = offs[idx][tp]
+            points_list.append([size_change, cell_myo, nbr_myo, offset, idx, tp])
     return np.array(points_list)
 
 
@@ -124,47 +139,51 @@ with h5py.File(data_h5, 'r') as f:
     myosin = f['myosin'][3:-3]
     segmentation = f['segmentation'][3:-3]
 
-myo, area = get_size_and_myo_dict(myo_s=3, area_s=3)
-to_plot = get_myo_time_points(myo, area)
+myo, area, offsets = get_size_and_myo_dict(myo_s=3, area_s=3)
+to_plot = get_myo_time_points(myo, area, offsets)
 get_best_regr(to_plot, 400)
 
 
+fp = '/home/zinchenk/work/drosophila_emryo_cells/imgs/revision_svg/'
 ## the loglog plot
 fig, ax = plt.subplots()
 plt.scatter(to_plot[:, 1], to_plot[:, 2], c=to_plot[:, 0], cmap='RdYlBu', vmin=0.9, vmax=1.1, s=20)
-#plt.plot([1,180], [1,180], c='black', linewidth=0.5)
 ax.vlines([80000, 100000], 24000, 220000, linestyles='dotted')
 ax.hlines([24000, 220000], 80000, 100000, linestyles='dotted')
 plt.xlabel("[cellular myosin]", size=35)
 plt.ylabel("[surrounding myosin]", size=35)
 #plt.title('Embryo 5', size=35)
-[tick.label.set_fontsize(25) for tick in ax.xaxis.get_major_ticks()]
-[tick.label.set_fontsize(25) for tick in ax.yaxis.get_major_ticks()]
-#plt.xlim(0.9, 300)
-#plt.ylim(0.7, 190)
+ax.tick_params(length=15, width=3)
+ax.tick_params(length=8, width=1, which='minor')
+plt.xticks(fontsize=35)
+plt.yticks(fontsize=35)
 plt.loglog()
 cb = plt.colorbar()
 for t in cb.ax.get_yticklabels():
-     t.set_fontsize(25)
+     t.set_fontsize(35)
 
-plt.show()
+figure = plt.gcf()
+figure.set_size_inches(16, 12)
+plt.savefig(fp + 'fig3j.svg', format='svg')
 
 
 # the zoom in plot colored by size
 plot_cutout = to_plot[(80000 < to_plot[:, 1]) & (to_plot[:, 1] < 100000)]
-slope, intercept, rvalue, _, _ = linregress(plot_cutout[:, 0], np.log(plot_cutout[:, 2]))
+slope, intercept, rvalue, _, _ = linregress(plot_cutout[:, 0], plot_cutout[:, 2])
 y = intercept + slope * plot_cutout[:, 0]
 fig, ax = plt.subplots()
 ax.plot(plot_cutout[:, 0], y, 'red', label='linear fit')
-#ax.scatter(plot_cutout[:, 0], np.log(plot_cutout[:, 2]), s=160, c=plot_cutout[:, 0], cmap='RdYlBu')
-ax.scatter(plot_cutout[:, 0], np.log(plot_cutout[:, 2]), s=200, c='tab:grey')
+ax.scatter(plot_cutout[:, 0], plot_cutout[:, 2], s=200, c='tab:grey')
 plt.xlabel("Relative size change", size=35)
-plt.ylabel("[surrounding myosin]", size=35)
-plt.text(1.04, 10.5, "Correlation={:.4f}".format(rvalue), size=35)
-plt.legend(loc='upper left', fontsize=25)
-[tick.label.set_fontsize(25) for tick in ax.xaxis.get_major_ticks()]
-[tick.label.set_fontsize(25) for tick in ax.yaxis.get_major_ticks()]
-plt.show()
+plt.ylabel("Surrounding myosin", size=35)
+plt.text(1.03, 40000, "Correlation={:.4f}".format(rvalue), size=35)
+plt.legend(loc='upper left', fontsize=35)
+ax.tick_params(length=15, width=3)
+plt.xticks(fontsize=35)
+plt.yticks(fontsize=35)
+figure = plt.gcf()
+figure.set_size_inches(16, 16)
+plt.savefig(fp + 'fig3k.svg', format='svg')
 
 
 # the ratio vs size change plot
@@ -196,4 +215,23 @@ plt.legend(loc='upper right', fontsize=25)
 [tick.label.set_fontsize(25) for tick in ax.xaxis.get_major_ticks()]
 [tick.label.set_fontsize(25) for tick in ax.yaxis.get_major_ticks()]
 #plt.title('Embryo 5', size=35)
+plt.show()
+
+# the offset vs myo in
+fig, ax = plt.subplots()
+plt.scatter(to_plot[:, 1], to_plot[:, 3] * 0.1217, c=to_plot[:, 0], cmap='RdYlBu', vmin=0.9, vmax=1.1, s=20)
+plt.xscale('log')
+plt.xlabel("[cellular myosin]", size=35)
+plt.ylabel("Myosin offset in the neighbourhood", size=35)
+cb = plt.colorbar()
+ax.tick_params(length=15, width=3)
+ax.tick_params(length=8, width=1, which='minor')
+plt.xticks(fontsize=35)
+plt.yticks(fontsize=35)
+for t in cb.ax.get_yticklabels():
+     t.set_fontsize(35)
+
+figure = plt.gcf()
+figure.set_size_inches(16, 12)
+plt.savefig(fp + 'fig3i.svg', format='svg')
 plt.show()
