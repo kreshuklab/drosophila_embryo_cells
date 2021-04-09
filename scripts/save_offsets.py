@@ -86,3 +86,41 @@ plt.xlabel("time (s)", size=35)
 plt.ylabel("surrounding myosin offset", size=35)
 plt.legend(loc='upper left', fontsize=20)
 plt.show()
+
+
+from skimage.util import map_array
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+tf = 22
+tf_image = segmentation[tf]
+props = regionprops(tf_image.astype(int), myosin[tf])
+distances = []
+
+plt.figure()
+ax = plt.gca()
+for p in props:
+    _ = plt.scatter(p.centroid[1], p.centroid[0], color='g', s=1000)
+    _ = plt.scatter(p.weighted_centroid[1], p.weighted_centroid[0], color='r', s=1000)
+    d = [c - w for c, w in zip(p.centroid, p.weighted_centroid)]
+    distances.append(np.linalg.norm(d))
+
+value_map = map_array(tf_image, np.unique(tf_image)[1:], np.array(distances))
+im = plt.imshow(value_map, vmin=0, vmax=20)
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("right", size="5%", pad=0.05)
+
+cb = plt.colorbar(im, cax=cax)
+for t in cb.ax.get_yticklabels():
+     t.set_fontsize(45)
+
+figure = plt.gcf()
+figure.set_size_inches(64, 48)
+plt.savefig(fp + 'fig3l_{}.png'.format(tf))
+plt.show()
+
+row_map = map_array(segmentation[tf], np.array(data_table.new_id), np.array(data_table.row_id) - 2)
+plt.imshow(row_map, cmap=ListedColormap(('white',) + colors))
+figure = plt.gcf()
+figure.set_size_inches(64, 48)
+plt.savefig(fp + 'fig3l_rows_{}.png'.format(tf))
+plt.show()
